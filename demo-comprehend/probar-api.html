@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Probar mi API — Comprehend</title>
+  <style>
+    :root{
+      --bg:#151D25; --card:#1E2933; --green:#00E582; --blue:#41B3FF;
+      --purple:#AC5BFF; --orange:#FF9900; --teal:#01A88D; --red:#FF5C5C; --white:#FFF; --grey:#B8C4CF;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+    body{background:var(--bg);color:var(--white);min-height:100vh;padding:28px;display:flex;justify-content:center;}
+    .wrap{width:100%;max-width:720px;}
+    h1{font-size:26px;margin-bottom:6px;}
+    h1 .hl{color:var(--teal);}
+    p.sub{color:var(--grey);margin-bottom:20px;font-size:15px;}
+    .card{background:var(--card);border-radius:16px;padding:22px;margin-bottom:18px;}
+    label{display:block;color:var(--grey);font-size:13px;margin:10px 0 6px;}
+    textarea{width:100%;background:var(--bg);border:1px solid #2C3A47;border-radius:10px;
+      padding:12px;color:var(--white);font-size:15px;min-height:90px;resize:vertical;}
+    .apibox{background:var(--card);border-radius:16px;padding:18px;margin-bottom:18px;}
+    .apibox input{width:100%;background:var(--bg);border:1px solid var(--orange);border-radius:10px;
+      padding:12px;color:var(--white);font-size:15px;}
+    button{width:100%;border:none;border-radius:10px;padding:13px 18px;margin-top:16px;
+      font-size:15px;font-weight:700;cursor:pointer;background:var(--teal);color:var(--bg);}
+    .pill{display:inline-block;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;}
+    .big{font-size:22px;}
+    .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+    .chip{background:var(--bg);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--grey);}
+    .chip b{color:var(--white);}
+    .scores{margin-top:14px;}
+    .score{margin-top:8px;}
+    .score .top{display:flex;justify-content:space-between;font-size:13px;}
+    .bar{height:8px;background:#2C3A47;border-radius:4px;margin-top:4px;overflow:hidden;}
+    .bar>span{display:block;height:100%;}
+    .ent{display:inline-block;background:var(--bg);border-radius:10px;padding:8px 12px;margin:4px 4px 0 0;
+      border-left:4px solid var(--purple);font-size:14px;}
+    .ent .t{color:var(--grey);font-size:11px;margin-left:6px;}
+    .empty{color:var(--grey);font-style:italic;}
+    .note{color:var(--grey);font-size:12px;margin-top:8px;}
+    .status{font-size:14px;margin-top:10px;min-height:20px;}
+    .ok{color:var(--green);} .err{color:var(--red);}
+    .foot{color:var(--grey);font-size:12px;text-align:center;margin-top:24px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Entiende un texto con <span class="hl">Comprehend</span></h1>
+    <p class="sub">Navegador → API Gateway → Lambda → Amazon Comprehend</p>
+
+    <div class="apibox">
+      <label>1) Pega aqui la URL de tu API (del paso de API Gateway)</label>
+      <input id="apiUrl" placeholder="https://xxxxxx.execute-api.us-east-1.amazonaws.com" />
+      <p class="note">Debe terminar sin barra al final. Se guarda solo en tu navegador.</p>
+    </div>
+
+    <div class="card">
+      <label>2) Escribe un texto (una opinion, un comentario, una resena)</label>
+      <textarea id="texto" placeholder="Ej: Me encanto el servicio, el equipo de Bogota fue muy amable."></textarea>
+      <button onclick="analizar()">Analizar texto</button>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="card">
+      <label>Resultado del analisis</label>
+      <div id="resultado"><p class="empty">Escribe un texto y pulsa "Analizar texto".</p></div>
+    </div>
+
+    <p class="foot">Demo en vivo · Sesion 5: IA/ML & Analytics · AWS Student Builder Group · UV</p>
+  </div>
+
+  <script>
+    const apiInput = document.getElementById('apiUrl');
+    apiInput.value = localStorage.getItem('apiUrlComp') || '';
+    apiInput.addEventListener('input', () => localStorage.setItem('apiUrlComp', apiInput.value.trim()));
+
+    const COLORES = {Positivo:'#00E582', Negativo:'#FF5C5C', Neutral:'#B8C4CF', Mixto:'#FF9900'};
+
+    function urlBase(){
+      let u = apiInput.value.trim();
+      if(!u){ setStatus('Primero pega la URL de tu API arriba.', false); return null; }
+      return u.replace(/\/+$/,'');
+    }
+    function setStatus(txt, ok){
+      const s = document.getElementById('status');
+      s.textContent = txt; s.className = 'status ' + (ok ? 'ok' : 'err');
+    }
+
+    async function analizar(){
+      const base = urlBase(); if(!base) return;
+      const texto = document.getElementById('texto').value.trim();
+      if(!texto){ setStatus('Escribe un texto primero.', false); return; }
+      setStatus('Analizando con Comprehend...', true);
+      try{
+        const r = await fetch(base + '/analizar', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({texto})
+        });
+        const data = await r.json();
+        if(r.ok){ pintar(data); setStatus('Analisis completo ✔', true); }
+        else{ setStatus('Error: ' + (data.error || r.status), false); }
+      }catch(e){ setStatus('No se pudo conectar. Revisa la URL y CORS.', false); }
+    }
+
+    function pintar(d){
+      const color = COLORES[d.sentimiento] || '#B8C4CF';
+      let html = '';
+      // sentimiento
+      html += '<div><span class="pill big" style="background:'+color+';color:#151D25">'+
+              escapar(d.sentimiento)+'</span></div>';
+      // idioma
+      html += '<div class="meta"><div class="chip">Idioma detectado: <b>'+escapar(d.idioma)+
+              '</b> ('+d.idioma_confianza+'%)</div></div>';
+      // puntajes
+      html += '<div class="scores">';
+      for(const k of ['Positivo','Negativo','Neutral','Mixto']){
+        const v = (d.puntajes && d.puntajes[k]) || 0;
+        html += '<div class="score"><div class="top"><span>'+k+'</span><span>'+v+'%</span></div>'+
+                '<div class="bar"><span style="width:'+v+'%;background:'+(COLORES[k])+'"></span></div></div>';
+      }
+      html += '</div>';
+      // entidades
+      html += '<label style="margin-top:16px">Entidades clave detectadas</label>';
+      if(!d.entidades || d.entidades.length === 0){
+        html += '<p class="empty">No se detectaron entidades.</p>';
+      } else {
+        html += '<div>' + d.entidades.map(e =>
+          '<span class="ent">'+escapar(e.texto)+'<span class="t">'+escapar(e.tipo)+'</span></span>'
+        ).join('') + '</div>';
+      }
+      document.getElementById('resultado').innerHTML = html;
+    }
+
+    function escapar(t){
+      return (t||'').toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
+  </script>
+</body>
+</html>

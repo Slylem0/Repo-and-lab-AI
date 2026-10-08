@@ -1,0 +1,15 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PermitirAnalisisDeTexto",
+      "Effect": "Allow",
+      "Action": [
+        "comprehend:DetectDominantLanguage",
+        "comprehend:DetectSentiment",
+        "comprehend:DetectEntities"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

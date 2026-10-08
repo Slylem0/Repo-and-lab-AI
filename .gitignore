@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv_build/
+
+# OS / editor
+.DS_Store
+*~
+.~lock.*#
+
+# Temporales de LibreOffice/Office
+~$*

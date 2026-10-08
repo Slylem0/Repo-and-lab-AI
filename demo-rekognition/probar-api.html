@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Probar mi API — Rekognition</title>
+  <style>
+    :root{
+      --bg:#151D25; --card:#1E2933; --green:#00E582; --blue:#41B3FF;
+      --purple:#AC5BFF; --orange:#FF9900; --teal:#01A88D; --white:#FFF; --grey:#B8C4CF;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+    body{background:var(--bg);color:var(--white);min-height:100vh;padding:28px;display:flex;justify-content:center;}
+    .wrap{width:100%;max-width:720px;}
+    h1{font-size:26px;margin-bottom:6px;}
+    h1 .hl{color:var(--teal);}
+    p.sub{color:var(--grey);margin-bottom:20px;font-size:15px;}
+    .card{background:var(--card);border-radius:16px;padding:22px;margin-bottom:18px;}
+    label{display:block;color:var(--grey);font-size:13px;margin:10px 0 6px;}
+    input[type=file]{width:100%;background:var(--bg);border:1px solid #2C3A47;border-radius:10px;
+      padding:12px;color:var(--white);font-size:15px;}
+    .apibox{background:var(--card);border-radius:16px;padding:18px;margin-bottom:18px;}
+    .apibox input{width:100%;background:var(--bg);border:1px solid var(--orange);border-radius:10px;
+      padding:12px;color:var(--white);font-size:15px;}
+    button{width:100%;border:none;border-radius:10px;padding:13px 18px;margin-top:16px;
+      font-size:15px;font-weight:700;cursor:pointer;background:var(--teal);color:var(--bg);}
+    button:disabled{opacity:.5;cursor:not-allowed;}
+    .preview{margin-top:16px;text-align:center;}
+    .preview img{max-width:100%;max-height:320px;border-radius:12px;}
+    .tag{display:flex;justify-content:space-between;align-items:center;background:var(--bg);
+      border-radius:10px;padding:10px 14px;margin-top:8px;border-left:4px solid var(--teal);}
+    .tag .n{font-weight:700;}
+    .tag .c{color:var(--green);font-weight:700;}
+    .bar{height:6px;background:#2C3A47;border-radius:3px;margin-top:4px;overflow:hidden;}
+    .bar>span{display:block;height:100%;background:var(--teal);}
+    .empty{color:var(--grey);font-style:italic;}
+    .note{color:var(--grey);font-size:12px;margin-top:8px;}
+    .status{font-size:14px;margin-top:10px;min-height:20px;}
+    .ok{color:var(--green);} .err{color:#FF5C5C;}
+    .foot{color:var(--grey);font-size:12px;text-align:center;margin-top:24px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Dale <span class="hl">ojos</span> a tu app con Rekognition</h1>
+    <p class="sub">Navegador → API Gateway → Lambda → Amazon Rekognition</p>
+
+    <div class="apibox">
+      <label>1) Pega aqui la URL de tu API (del paso de API Gateway)</label>
+      <input id="apiUrl" placeholder="https://xxxxxx.execute-api.us-east-1.amazonaws.com" />
+      <p class="note">Debe terminar sin barra al final. Se guarda solo en tu navegador.</p>
+    </div>
+
+    <div class="card">
+      <label>2) Elige una imagen en formato JPG o PNG (Rekognition no acepta WebP)</label>
+      <input type="file" id="archivo" accept="image/jpeg,image/png" onchange="previsualizar()" />
+      <div class="preview" id="preview"></div>
+      <button id="btn" onclick="analizar()" disabled>Analizar imagen</button>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="card">
+      <label>Lo que la IA ve en tu imagen</label>
+      <div id="lista"><p class="empty">Sube una imagen y pulsa "Analizar imagen".</p></div>
+    </div>
+
+    <p class="foot">Demo en vivo · Sesion 5: IA/ML & Analytics · AWS Student Builder Group · UV</p>
+  </div>
+
+  <script>
+    const apiInput = document.getElementById('apiUrl');
+    apiInput.value = localStorage.getItem('apiUrlRek') || '';
+    apiInput.addEventListener('input', () => localStorage.setItem('apiUrlRek', apiInput.value.trim()));
+
+    let imagenBase64 = null;
+
+    function urlBase(){
+      let u = apiInput.value.trim();
+      if(!u){ setStatus('Primero pega la URL de tu API arriba.', false); return null; }
+      return u.replace(/\/+$/,'');
+    }
+    function setStatus(txt, ok){
+      const s = document.getElementById('status');
+      s.textContent = txt; s.className = 'status ' + (ok ? 'ok' : 'err');
+    }
+
+    // Rekognition solo acepta JPEG y PNG (no WebP, GIF, etc.)
+    const FORMATOS_OK = ['image/jpeg', 'image/png'];
+
+    function previsualizar(){
+      const f = document.getElementById('archivo').files[0];
+      if(!f) return;
+      if(!FORMATOS_OK.includes(f.type)){
+        imagenBase64 = null;
+        document.getElementById('preview').innerHTML = '';
+        document.getElementById('btn').disabled = true;
+        setStatus('Formato no valido. Rekognition solo acepta JPG o PNG (tu archivo es ' +
+                  (f.type || 'desconocido') + ').', false);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = e => {
+        imagenBase64 = e.target.result; // "data:image/...;base64,XXXX"
+        document.getElementById('preview').innerHTML = '<img src="'+imagenBase64+'" />';
+        document.getElementById('btn').disabled = false;
+        setStatus('Imagen lista. Pulsa "Analizar imagen".', true);
+      };
+      reader.readAsDataURL(f);
+    }
+
+    async function analizar(){
+      const base = urlBase(); if(!base) return;
+      if(!imagenBase64){ setStatus('Elige una imagen primero.', false); return; }
+      setStatus('Analizando con Rekognition...', true);
+      document.getElementById('btn').disabled = true;
+      try{
+        const r = await fetch(base + '/analizar', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({imagen: imagenBase64})
+        });
+        const data = await r.json();
+        if(r.ok){
+          const lista = document.getElementById('lista');
+          if(!data.etiquetas || data.etiquetas.length === 0){
+            lista.innerHTML = '<p class="empty">No se detectaron etiquetas con suficiente confianza.</p>';
+          } else {
+            lista.innerHTML = data.etiquetas.map(e =>
+              '<div class="tag"><div style="flex:1"><span class="n">'+escapar(e.nombre)+'</span>'+
+              '<div class="bar"><span style="width:'+e.confianza+'%"></span></div></div>'+
+              '<span class="c">'+e.confianza+'%</span></div>').join('');
+          }
+          setStatus('Listo: ' + (data.total||0) + ' etiqueta(s) detectada(s).', true);
+        } else {
+          setStatus('Error: ' + (data.error || r.status), false);
+        }
+      }catch(e){ setStatus('No se pudo conectar. Revisa la URL y CORS.', false); }
+      document.getElementById('btn').disabled = false;
+    }
+
+    function escapar(t){
+      return (t||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
+  </script>
+</body>
+</html>
